@@ -1,27 +1,23 @@
 // routes/customValueRoutes.js
 const express = require("express");
 const router = express.Router();
-const { withAudit } = require("../utils/audit");
+const { protect } = require("../middlewares/authMiddleware");
 const {
   getSevenByLocation,
   getSevenByEntity,
+  updateCustomValues, // THIS calls GHL
 } = require("../controllers/customValueController");
 
-// ✅ PUBLIC (no protect, no audit)
+// Public read (raw GHL)
 router.get("/custom-values/location/:locationId", getSevenByLocation);
 
-// 🔒 keep audit (and your protect if you want) on private routes
-router.get(
-  "/custom-values/:scope(parent|child)/:id",
-  withAudit({
-    action: "custom_values_entity",
-    entityType: "system",
-    pickMeta: (req) => ({
-      scope: req.params.scope,
-      by: req.query.by || "id",
-      fresh: req.query.fresh || "0",
-    }),
-  })(getSevenByEntity)
-);
+// All reads/updates below require auth
+router.use(protect);
+
+// DB reads (merged)
+router.get("/custom-values/:scope(parent|child)/:id", getSevenByEntity);
+
+// ✅ THIS is the endpoint your frontend must call to update values in DB + GHL
+router.patch("/custom-values/:scope(parent|child)/:id", updateCustomValues);
 
 module.exports = router;

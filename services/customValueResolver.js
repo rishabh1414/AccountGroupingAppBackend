@@ -3,6 +3,7 @@ const Parent = require("../models/parentModel");
 const Child = require("../models/childModel");
 const { fetchAndFormatCustomValues } = require("../services/ghlApiService");
 
+// keep name for backward-compat, but now has 8 entries
 const SEVEN_KEYS = [
   "agencyColor1",
   "agencyColor2",
@@ -11,6 +12,7 @@ const SEVEN_KEYS = [
   "agencyName",
   "agencyPhoneNumber",
   "agencySupportEmail",
+  "appTheme", // NEW
 ];
 
 function flattenSeven(obj = {}) {
@@ -19,6 +21,7 @@ function flattenSeven(obj = {}) {
     return acc;
   }, {});
 }
+
 function mergeChildOverParent(childVals = {}, parentVals = {}) {
   const out = {};
   for (const k of SEVEN_KEYS) {
@@ -33,13 +36,13 @@ function mergeChildOverParent(childVals = {}, parentVals = {}) {
   return out;
 }
 
-// Fresh from GHL for any locationId (parent or child)
+// Fresh read from GHL for any locationId
 async function getSevenFromGhl(locationId) {
-  const formatted = await fetchAndFormatCustomValues(locationId); // must return { key: {id,value} }
+  const formatted = await fetchAndFormatCustomValues(locationId); // { k: {id, value} }
   return { source: "ghl", values: formatted, flat: flattenSeven(formatted) };
 }
 
-// From DB: if child, merge child→parent; if parent, return parent
+// From DB: if child, merge child→parent; if parent, return stored
 async function getSevenFromDbByEntity({ scope, id, by = "id" }) {
   if (scope === "parent") {
     const parent =
@@ -50,7 +53,7 @@ async function getSevenFromDbByEntity({ scope, id, by = "id" }) {
     return {
       source: "db",
       values: parent.customValues || {},
-      flat: flattenSeven(parent.customValues),
+      flat: flattenSeven(parent.customValues || {}),
     };
   }
   if (scope === "child") {
@@ -61,8 +64,8 @@ async function getSevenFromDbByEntity({ scope, id, by = "id" }) {
     if (!child) throw new Error("Child not found");
     const parent = await Parent.findById(child.parentId);
     const merged = mergeChildOverParent(
-      child.customValues,
-      parent?.customValues
+      child.customValues || {},
+      parent?.customValues || {}
     );
     return { source: "db-merged", values: merged, flat: flattenSeven(merged) };
   }
